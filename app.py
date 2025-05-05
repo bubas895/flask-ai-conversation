@@ -30,14 +30,40 @@ personalities = {
     "Hikaye Anlatıcısı": "Sen bir hikaye anlatıcısı gibi davran. Cevaplarını hikaye formatında, yaratıcı ve akıcı bir şekilde sun. Türkçe konuş."
 }
 
+# API anahtarlarını doğrulamak için test çağrısı
+def validate_api_key(api_key):
+    try:
+        conn = http.client.HTTPSConnection("inference-api.nousresearch.com", timeout=10)  # 10 saniye timeout
+        payload = {
+            "model": "DeepHermes-3-Mistral-24B-Preview",
+            "messages": [
+                {"role": "system", "content": "Merhaba, bu bir testtir."},
+                {"role": "user", "content": "Merhaba!"}
+            ],
+            "max_tokens": 10
+        }
+        headers = {
+            'Authorization': f"Bearer {api_key}",
+            'Content-Type': "application/json"
+        }
+        conn.request("POST", "/v1/chat/completions", json.dumps(payload), headers)
+        res = conn.getresponse()
+        data = res.read()
+        response = json.loads(data.decode("utf-8"))
+        if "choices" in response and len(response["choices"]) > 0:
+            return True, None
+        return False, "Geçersiz API yanıtı"
+    except Exception as e:
+        return False, str(e)
+
 # NousResearch API çağrısı (retry ile)
-@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
+@retry(stop=stop_after_attempt(2), wait=wait_fixed(2))  # 2 deneme, her deneme arasında 2 saniye bekle
 def call_nousresearch_api(api_key, prompt, personality, max_tokens_value):
     try:
         if not api_key:
             raise ValueError("API anahtarı eksik")
 
-        conn = http.client.HTTPSConnection("inference-api.nousresearch.com", timeout=30)  # 30 saniye timeout
+        conn = http.client.HTTPSConnection("inference-api.nousresearch.com", timeout=20)  # 20 saniye timeout
         
         system_message = personalities.get(personality, personalities["Varsayılan"])
         
@@ -104,6 +130,17 @@ def start_conversation():
         if not ai1_key or not ai2_key:
             logger.warning("API keys missing")
             return jsonify({"error": "Her iki API anahtarı da gerekli"}), 400
+
+        # API anahtarlarını doğrula
+        valid_ai1, error_ai1 = validate_api_key(ai1_key)
+        if not valid_ai1:
+            logger.error(f"AI 1 API key validation failed: {error_ai1}")
+            return jsonify({"error": f"AI 1 API anahtarı geçersiz: {error_ai1}"}), 400
+
+        valid_ai2, error_ai2 = validate_api_key(ai2_key)
+        if not valid_ai2:
+            logger.error(f"AI 2 API key validation failed: {error_ai2}")
+            return jsonify({"error": f"AI 2 API anahtarı geçersiz: {error_ai2}"}), 400
         
         # AI 1 için başlangıç sorusu
         prompt = "Düşünceli bir soru sorarak konuşmamızı başlat."
