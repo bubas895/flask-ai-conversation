@@ -132,7 +132,7 @@
     <div class="chat-box" id="chatBox"></div>
 
     <script>
-        const BACKEND_URL = "smooth-kim-bubas895-9fd216b3.koyeb.app/"; // Koyeb URL'nizi buraya ekleyin
+        const BACKEND_URL = "https://flask-ai-conversation.koyeb.app"; // Koyeb URL'nizi buraya ekleyin
         let timerInterval;
         let autoTalkEnabled = false;
         let autoTalkTimeout;
@@ -183,6 +183,18 @@
 
         async function startConversation() {
             try {
+                const ai1_key = document.getElementById('ai1_key').value.trim();
+                const ai2_key = document.getElementById('ai2_key').value.trim();
+                const max_tokens = document.getElementById('max_tokens').value;
+                const ai1_personality = document.getElementById('ai1_personality').value;
+                const ai2_personality = document.getElementById('ai2_personality').value;
+
+                // API anahtarlarını doğrula
+                if (!ai1_key || !ai2_key) {
+                    alert('Lütfen her iki API anahtarını da girin!');
+                    throw new Error('API anahtarları eksik');
+                }
+
                 await setApiKeys();
                 
                 // Yükleme ekranını göster
@@ -191,7 +203,8 @@
 
                 const response = await fetch(`${BACKEND_URL}/start_conversation`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ai1_key, ai2_key })
                 });
                 const data = await response.json();
                 
