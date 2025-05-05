@@ -36,7 +36,7 @@ def call_nousresearch_api(api_key, prompt, personality, max_tokens_value):
         if not api_key:
             raise ValueError("API anahtarı eksik")
 
-        conn = http.client.HTTPSConnection("inference-api.nousresearch.com")
+        conn = http.client.HTTPSConnection("inference-api.nousresearch.com", timeout=30)  # 30 saniye timeout
         
         system_message = personalities.get(personality, personalities["Varsayılan"])
         
@@ -64,6 +64,9 @@ def call_nousresearch_api(api_key, prompt, personality, max_tokens_value):
         if "choices" in response and len(response["choices"]) > 0:
             return response["choices"][0]["message"]["content"], duration
         return "Hata: Geçersiz API yanıtı", duration
+    except http.client.HTTPException as e:
+        logger.error(f"HTTP error in API call: {str(e)}")
+        return f"Hata: API çağrısı başarısız: {str(e)}", 0
     except Exception as e:
         logger.error(f"call_nousresearch_api hatası: {str(e)}")
         return f"Hata: {str(e)}", 0
@@ -82,6 +85,7 @@ def set_api_keys():
         max_tokens = int(data.get("max_tokens", 256))
         ai_personalities["ai1"] = data.get("ai1_personality", "Varsayılan")
         ai_personalities["ai2"] = data.get("ai2_personality", "Varsayılan")
+        logger.info(f"API keys set: ai1_key={api_keys['ai1']}, ai2_key={api_keys['ai2']}")
         return jsonify({"status": "API anahtarları ve ayarlar güncellendi"})
     except Exception as e:
         logger.error(f"set_api_keys hatası: {str(e)}")
@@ -93,7 +97,9 @@ def start_conversation():
         global conversation
         conversation = []  # Konuşma geçmişini sıfırla
         
+        logger.info(f"Starting conversation with keys: ai1_key={api_keys['ai1']}, ai2_key={api_keys['ai2']}")
         if not api_keys["ai1"] or not api_keys["ai2"]:
+            logger.warning("API keys missing")
             return jsonify({"error": "Her iki API anahtarı da gerekli"}), 400
         
         # AI 1 için başlangıç sorusu
