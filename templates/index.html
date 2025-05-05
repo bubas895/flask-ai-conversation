@@ -132,7 +132,7 @@
     <div class="chat-box" id="chatBox"></div>
 
     <script>
-        const BACKEND_URL = "https://smooth-kim-bubas895-9fd216b3.koyeb.app/"; // Koyeb URL'nizi buraya ekleyin
+        const BACKEND_URL = "https://flask-ai-conversation.koyeb.app"; // Koyeb URL'nizi buraya ekleyin
         let timerInterval;
         let autoTalkEnabled = false;
         let autoTalkTimeout;
@@ -157,11 +157,17 @@
         }
 
         async function setApiKeys() {
-            const ai1_key = document.getElementById('ai1_key').value;
-            const ai2_key = document.getElementById('ai2_key').value;
+            const ai1_key = document.getElementById('ai1_key').value.trim();
+            const ai2_key = document.getElementById('ai2_key').value.trim();
             const max_tokens = document.getElementById('max_tokens').value;
             const ai1_personality = document.getElementById('ai1_personality').value;
             const ai2_personality = document.getElementById('ai2_personality').value;
+
+            // API anahtarlarını doğrula
+            if (!ai1_key || !ai2_key) {
+                alert('Lütfen her iki API anahtarını da girin!');
+                throw new Error('API anahtarları eksik');
+            }
 
             const response = await fetch(`${BACKEND_URL}/set_api_keys`, {
                 method: 'POST',
@@ -171,43 +177,63 @@
             const result = await response.json();
             if (result.error) {
                 alert('Hata: ' + result.error);
+                throw new Error(result.error);
             }
         }
 
         async function startConversation() {
-            await setApiKeys();
-            
-            // Yükleme ekranını göster
-            document.getElementById('loading').style.display = 'block';
-            startTimer();
+            try {
+                const ai1_key = document.getElementById('ai1_key').value.trim();
+                const ai2_key = document.getElementById('ai2_key').value.trim();
+                const max_tokens = document.getElementById('max_tokens').value;
+                const ai1_personality = document.getElementById('ai1_personality').value;
+                const ai2_personality = document.getElementById('ai2_personality').value;
 
-            const response = await fetch(`${BACKEND_URL}/start_conversation`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const data = await response.json();
-            
-            // Yükleme ekranını gizle
-            document.getElementById('loading').style.display = 'none';
-            stopTimer();
+                // API anahtarlarını doğrula
+                if (!ai1_key || !ai2_key) {
+                    alert('Lütfen her iki API anahtarını da girin!');
+                    throw new Error('API anahtarları eksik');
+                }
 
-            const chatBox = document.getElementById('chatBox');
-            chatBox.innerHTML = '';
-            if (data.error) {
-                chatBox.innerHTML = `<div class="chat-message">Hata: ${data.error}</div>`;
-            } else {
-                data.conversation.forEach(msg => {
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = `chat-message ${msg.sender === 'AI 1' ? 'ai1' : 'ai2'}`;
-                    messageDiv.textContent = `${msg.sender}: ${msg.message} (Yanıt Süresi: ${msg.duration.toFixed(2)} saniye)`;
-                    chatBox.appendChild(messageDiv);
+                await setApiKeys();
+                
+                // Yükleme ekranını göster
+                document.getElementById('loading').style.display = 'block';
+                startTimer();
+
+                const response = await fetch(`${BACKEND_URL}/start_conversation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ai1_key, ai2_key })
                 });
-            }
-            chatBox.scrollTop = chatBox.scrollHeight;
+                const data = await response.json();
+                
+                // Yükleme ekranını gizle
+                document.getElementById('loading').style.display = 'none';
+                stopTimer();
 
-            // Otomatik konuşma aktifse, 5 saniye sonra tekrar başlat
-            if (autoTalkEnabled) {
-                autoTalkTimeout = setTimeout(startConversation, 5000);
+                const chatBox = document.getElementById('chatBox');
+                chatBox.innerHTML = '';
+                if (data.error) {
+                    chatBox.innerHTML = `<div class="chat-message">Hata: ${data.error}</div>`;
+                } else {
+                    data.conversation.forEach(msg => {
+                        const messageDiv = document.createElement('div');
+                        messageDiv.className = `chat-message ${msg.sender === 'AI 1' ? 'ai1' : 'ai2'}`;
+                        messageDiv.textContent = `${msg.sender}: ${msg.message} (Yanıt Süresi: ${msg.duration.toFixed(2)} saniye)`;
+                        chatBox.appendChild(messageDiv);
+                    });
+                }
+                chatBox.scrollTop = chatBox.scrollHeight;
+
+                // Otomatik konuşma aktifse, 5 saniye sonra tekrar başlat
+                if (autoTalkEnabled) {
+                    autoTalkTimeout = setTimeout(startConversation, 5000);
+                }
+            } catch (error) {
+                console.error('Konuşma başlatılırken hata oluştu:', error);
+                document.getElementById('loading').style.display = 'none';
+                stopTimer();
             }
         }
 
