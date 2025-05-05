@@ -4,6 +4,7 @@ import http.client
 import json
 import logging
 import time
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 app = Flask(__name__)
 CORS(app)  # CORS'u etkinleştir
@@ -12,8 +13,7 @@ CORS(app)  # CORS'u etkinleştir
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# API anahtarları, konuşma geçmişi ve kişilik modelleri
-api_keys = {"ai1": "", "ai2": ""}
+# Konuşma geçmişi ve kişilik modelleri
 conversation = []
 max_tokens = 256  # Varsayılan maksimum token
 ai_personalities = {
@@ -30,7 +30,8 @@ personalities = {
     "Hikaye Anlatıcısı": "Sen bir hikaye anlatıcısı gibi davran. Cevaplarını hikaye formatında, yaratıcı ve akıcı bir şekilde sun. Türkçe konuş."
 }
 
-# NousResearch API çağrısı
+# NousResearch API çağrısı (retry ile)
+@retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
 def call_nousresearch_api(api_key, prompt, personality, max_tokens_value):
     try:
         if not api_key:
@@ -78,15 +79,13 @@ def index():
 @app.route('/set_api_keys', methods=['POST'])
 def set_api_keys():
     try:
-        global api_keys, max_tokens, ai_personalities
+        global max_tokens, ai_personalities
         data = request.json
-        api_keys["ai1"] = data.get("ai1_key", "")
-        api_keys["ai2"] = data.get("ai2_key", "")
         max_tokens = int(data.get("max_tokens", 256))
         ai_personalities["ai1"] = data.get("ai1_personality", "Varsayılan")
         ai_personalities["ai2"] = data.get("ai2_personality", "Varsayılan")
-        logger.info(f"API keys set: ai1_key={api_keys['ai1']}, ai2_key={api_keys['ai2']}")
-        return jsonify({"status": "API anahtarları ve ayarlar güncellendi"})
+        logger.info(f"Settings updated: max_tokens={max_tokens}, ai1_personality={ai_personalities['ai1']}, ai2_personality={ai_personalities['ai2']}")
+        return jsonify({"status": "Ayarlar güncellendi"})
     except Exception as e:
         logger.error(f"set_api_keys hatası: {str(e)}")
         return jsonify({"error": str(e)}), 500
@@ -97,32 +96,36 @@ def start_conversation():
         global conversation
         conversation = []  # Konuşma geçmişini sıfırla
         
-        logger.info(f"Starting conversation with keys: ai1_key={api_keys['ai1']}, ai2_key={api_keys['ai2']}")
-        if not api_keys["ai1"] or not api_keys["ai2"]:
+        data = request.json
+        ai1_key = data.get("ai1_key", "")
+        ai2_key = data.get("ai2_key", "")
+        
+        logger.info(f"Starting conversation with keys: ai1_key={ai1_key}, ai2_key={ai2_key}")
+        if not ai1_key or not ai2_key:
             logger.warning("API keys missing")
             return jsonify({"error": "Her iki API anahtarı da gerekli"}), 400
         
         # AI 1 için başlangıç sorusu
         prompt = "Düşünceli bir soru sorarak konuşmamızı başlat."
-        ai1_response, ai1_duration = call_nousresearch_api(api_keys["ai1"], prompt, ai_personalities["ai1"], max_tokens)
+        ai1_response, ai1_duration = call_nousresearch_api(ai1_key, prompt, ai_personalities["ai1"], max_tokens)
         if "Hata" in ai1_response:
             return jsonify({"error": ai1_response}), 500
         conversation.append({"sender": "AI 1", "message": ai1_response, "duration": ai1_duration})
         
         # AI 2, AI 1'in sorusuna yanıt veriyor
-        ai2_response, ai2_duration = call_nousresearch_api(api_keys["ai2"], ai1_response, ai_personalities["ai2"], max_tokens)
+        ai2_response, ai2_duration = call_nousresearch_api(ai2_key, ai1_response, ai_personalities["ai2"], max_tokens)
         if "Hata" in ai2_response:
             return jsonify({"error": ai2_response}), 500
         conversation.append({"sender": "AI 2", "message": ai2_response, "duration": ai2_duration})
         
         # 2 tur daha konuşma
         for _ in range(2):
-            ai1_response, ai1_duration = call_nousresearch_api(api_keys["ai1"], ai2_response, ai_personalities["ai1"], max_tokens)
+            ai1_response, ai1_duration = call_nousresearch_api(ai1_key, ai2_response, ai_personalities["ai1"], max_tokens)
             if "Hata" in ai1_response:
                 return jsonify({"error": ai1_response}), 500
             conversation.append({"sender": "AI 1", "message": ai1_response, "duration": ai1_duration})
             
-            ai2_response, ai2_duration = call_nousresearch_api(api_keys["ai2"], ai1_response, ai_personalities["ai2"], max_tokens)
+            ai2_response, ai2_duration = call_nousresearch_api(ai2_key, ai1_response, ai_personalities["ai2"], max_tokens)
             if "Hata" in ai2_response:
                 return jsonify({"error": ai2_response}), 500
             conversation.append({"sender": "AI 2", "message": ai2_response, "duration": ai2_duration})
