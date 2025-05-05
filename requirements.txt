@@ -1,5 +1,6 @@
-Flask==3.0.3
-Werkzeug==3.0.4
+Flask==2.0.1
+Werkzeug==2.0.3
 requests
 gunicorn==20.1.0
 flask-cors==4.0.1
+tenacity==8.5.0
